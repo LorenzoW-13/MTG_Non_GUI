@@ -10,7 +10,16 @@
 //Databse manager class
 #include "Libraries/db_manager.h"
 
+//Test libraries
+#include <ctime>
+#include <string>
+
 int main() {
+    //Random number generator for quick testing
+    srand(time(0));
+    int random_n = rand();
+
+
     //Database handle and name
     sqlite3* db;
     const char* db_name = "test.db";
@@ -27,5 +36,26 @@ int main() {
         std::cout << "Database ok" << std::endl;
     }
 
+    dbo = tables(db);
+    if (dbo != SQLITE_OK) {
+        //Error message already thrown by db_manager
+        sqlite3_close(db);
+        return dbo;
+    }
+    else {
+        //Debug check
+        std::cout << "Proceding. . ." << std::endl;
+    }
+
+    std::string name = "Album_" + std::to_string(random_n);
+
+    dbo = make_album(db, name);
+    if (dbo != SQLITE_OK) {
+        //Error message thrown by db_manager
+        sqlite3_close(db);
+        return dbo;
+    }
+    
+    return 0;
     
 }
