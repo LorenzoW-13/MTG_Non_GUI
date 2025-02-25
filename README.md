@@ -6,5 +6,5 @@ Compiler instruction:
 2) - Extract the content of .zip inside the "Libraries" folder
 3) - Run
      - gcc -c Libraries/sqlite3.c -o sqlite3.o
-     - g++ main.cpp sqlite3.o -Wall -o MTGCollector
+     - g++ main.cpp db_manager.cpp sqlite3.o -Wall -o MTGCollector
      - ./MTGCollector

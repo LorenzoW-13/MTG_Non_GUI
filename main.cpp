@@ -47,13 +47,23 @@ int main() {
         std::cout << "Proceding. . ." << std::endl;
     }
 
-    std::string name = "Album_" + std::to_string(random_n);
+    for(int i = 0; i < 2; i++) {
+        std::string name = "Album_" + std::to_string(random_n + i);
 
-    dbo = make_album(db, name);
-    if (dbo != SQLITE_OK) {
+        dbo = make_album(db, name);
+        if (dbo != SQLITE_OK) {
         //Error message thrown by db_manager
         sqlite3_close(db);
         return dbo;
+    }
+    }
+
+    for(int i = 0; i < 10; i++) {
+        dbo = make_cell(db, 1);
+    }
+
+    for(int i = 0; i < 10; i++) {
+        dbo = make_cell(db, 2);
     }
     
     return 0;

@@ -11,4 +11,6 @@ int tables(sqlite3* db);
 
 int make_album(sqlite3* db, std::string name);
 
+int make_cell(sqlite3* db, int album_id);
+
 #endif
