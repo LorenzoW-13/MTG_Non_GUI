@@ -15,48 +15,50 @@
 #include <string>
 
 int main() {
-    //Random number generator for quick testing
+    //DEBUG: RNG for testing
     srand(time(0));
     int random_n = rand();
 
-
-    //Database handle and name
+    //DB handle and name
     sqlite3* db;
-    const char* db_name = "test.db";
+    const char* db_name = "Test.db";
 
-    //Database creation/opening and error handling
+    //DB creation/opening
     int dbo = sqlite3_open(db_name, &db);
-    if(dbo != SQLITE_OK) {
-        //If there's an error in the DB the program closes to prevent data loss
-        std::cerr << "SQL error: " << sqlite3_errmsg(db) << std::endl;
+    if(dbo != SQLITE_OK){
+        //Error handling
+        std::cerr << "SQL Error: " << sqlite3_errmsg(db) << std::endl;
         return dbo;
     }
     else {
-        //debug controls
+        //Debug checks
         std::cout << "Database ok" << std::endl;
     }
 
+    //Tables creation at first launch
     dbo = tables(db);
-    if (dbo != SQLITE_OK) {
-        //Error message already thrown by db_manager
-        sqlite3_close(db);
+    if(dbo != SQLITE_OK) {
+        //Error handling
+        sqlite3_close(db); //Error messages thrown by tables function
         return dbo;
     }
     else {
-        //Debug check
-        std::cout << "Proceding. . ." << std::endl;
+        //Debug checks
+        std::cout << "Proceding . . ." << std::endl;
     }
 
-    for(int i = 0; i < 2; i++) {
+    //Test "make_album"
+    for(int i = 0; i < 3; i++) {
         std::string name = "Album_" + std::to_string(random_n + i);
-
         dbo = make_album(db, name);
-        if (dbo != SQLITE_OK) {
-        //Error message thrown by db_manager
-        sqlite3_close(db);
-        return dbo;
+
+        if(dbo != SQLITE_OK) {
+            //Error handling
+            sqlite3_close(db); //Error message thrown by make_album function
+            return dbo;
+        }
     }
-    }
+    
 
     for(int i = 0; i < 10; i++) {
         dbo = make_cell(db, 1);
@@ -65,7 +67,18 @@ int main() {
     for(int i = 0; i < 10; i++) {
         dbo = make_cell(db, 2);
     }
-    
+
+    int j = 0;
+
+    for(int i = 0; i < 10; i++) {
+        if(i%2) {
+            j++;
+        }
+        std::string name_C = "Card_" + std::to_string(random_n + j);
+
+        dbo = make_card(db, name_C, "set", 1);
+    }
+
     return 0;
     
 }
