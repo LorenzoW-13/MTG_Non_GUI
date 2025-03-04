@@ -48,7 +48,7 @@ int main() {
     }
 
     //Test "make_album"
-    for(int i = 0; i < 3; i++) {
+    /*for(int i = 0; i < 3; i++) {
         std::string name = "Album_" + std::to_string(random_n + i);
         dbo = make_album(db, name);
 
@@ -57,7 +57,7 @@ int main() {
             sqlite3_close(db); //Error message thrown by make_album function
             return dbo;
         }
-    }
+    }*/
     
 
     for(int i = 0; i < 10; i++) {
@@ -70,7 +70,7 @@ int main() {
 
     int j = 0;
 
-    for(int i = 0; i < 10; i++) {
+    for(int i = 0; i < 1; i++) {
         if(i%2) {
             j++;
         }

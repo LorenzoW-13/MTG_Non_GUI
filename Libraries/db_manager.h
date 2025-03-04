@@ -24,6 +24,9 @@ int find_and_insert(sqlite3* db, std::string card_name, std::string card_set, in
 //Record the data for a new card
 int recorddata(sqlite3* db, std::string card_name);
 
+//Bind data to statement
+int text_bind(sqlite3* db, sqlite3_stmt** stmt, int position, std::string value);
+
 //Execute a "Prepare" instruction, avoiding repetitions (db_manager.cpp 288 - )
 int vprepare(sqlite3* db, const char* sql, sqlite3_stmt** stmt);
 #endif
