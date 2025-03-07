@@ -82,6 +82,13 @@ int tables(sqlite3* db) {
                             "wording TEXT DEFAULT NULL, " //Text on the card, NULL by default as many creatures only have a S/T field. IMPORTANT: during preliminary testing is ignored to quicken execution
                             "album_id INTEGER NOT NULL, " //Album where card is supposed to be saved, is FOREIGN KEY (see below) and matches the card's color identity
                             "FOREIGN KEY(album_id) REFERENCES Album(id));";
+    const char* SData =     "CREATE TABLE IF NOT EXIST SData ("
+                            "id INTEGER PRIMARY KEY AUTOINCREMENT, " //Is primary key
+                            "name TEXT NOT NULL, " //Card name, is foreign key
+                            "c_set TEXT NOT NULL, " //Card set
+                            "value DECIMAL DEFAULT NULL, " //Price, set to null in the first iteration
+                            "UNIQUE(name, c_set), " //Each couple card name - card set is unique
+                            "FOREIGN KEY(name) REFERENCES CData(name));";  
 
     //Error message for SQLite operations
     char* errormessage;
@@ -95,7 +102,7 @@ int tables(sqlite3* db) {
         sqlite3_free(errormessage);
         return -111;
     }
-    else {
+    else {card_id = sqlite3_last_insert_rowid(db);
         //Debug check
         std::cout << "First Run control executed correctly" << std::endl;
     }
@@ -113,7 +120,7 @@ int tables(sqlite3* db) {
         }
         else {
             //Debug check
-            std::cout << "Album created/found successfully" << std::endl;
+            std::cout << "Album created successfully" << std::endl;
         }
 
         dbo = sqlite3_exec(db, Cells, nullptr, nullptr, &errormessage);
@@ -164,6 +171,19 @@ int tables(sqlite3* db) {
             std::cout << "Card data created/found successfully" << std::endl;
         }
 
+
+        dbo = sqlite3_exec(db, SData, nullptr, nullptr, &errormessage);
+        if(dbo != SQLITE_OK) {
+            //In case of errors, throws an error code and abort the function. Main app will also close to prevent data loss and errors.
+            std::cerr << "SQL error: " << errormessage << std::endl;
+            sqlite3_free(errormessage);
+            return -111;
+        }
+        else {
+            //Debug check
+            std::cout << "Card-set data created/found successfully" << std::endl;
+        }
+
         //Populate the Album table
         const char* Populate = "INSERT INTO Album (name) VALUES (?);";
         sqlite3_stmt* stmt;
@@ -194,6 +214,10 @@ int tables(sqlite3* db) {
             }
         }
 
+    }
+    else {
+        //Debug check
+        std::cout << "Tables already existing" << std::endl;
     }
 
     return dbo;   
@@ -313,48 +337,54 @@ int make_cell(sqlite3* db, int album_id) {
     return dbo;
 }
 
-int make_card(sqlite3* db, std::string name, std::string set, int NCards = 1) {
-    //Check if the card has already been inserted before
+int make_card(sqlite3* db, std::string name, std::string set, int number) {
+    //Check if the card exists in the system
     const char* sql1 = "SELECT album_id FROM CData WHERE name = ?;";
-    //Album id (if found) is saved as an int variable
-    int album = -1;
-    //Before searching, assume all cards have never been recorded
-    //Obsolete: i run the functions directly in the if else cases
-    //int found = 0;
+    //Album id (if found) is recorded
+    int album = -1; //Default value -1, if not changed, signals the application to call record data (see #)
 
     //Statement handle
     sqlite3_stmt* stmt = nullptr;
 
-    //Prepare the statement to insert card name
+    //Prepare statement
     int dbo = vprepare(db, sql1, &stmt);
-    //Error handling
     if(dbo != SQLITE_OK) {
-        //Error message thrown by vprepare, signal the error to main
-        return dbo;
+        //Prepare error signal
+        return -112;
     }
 
-    //Insert the name to be searched
-    sqlite3_bind_text(stmt, 1, name.c_str(), -1, nullptr);
+    //If preparation is successfull bind name for the searched
+    sqlite3_bind_text(stmt, 1, name.c_str(), -1, SQLITE_STATIC);
 
-    //Check if the card already exists and, if not, call the "create_data" function
-    if(sqlite3_step(stmt) == SQLITE_ROW) {
-        //Debug check
-        std::cout << "Found correctly" << std::endl;
-
+    //Check if card exists
+    dbo = sqlite3_step(stmt);
+    if(dbo == SQLITE_ROW) {
+        //Upon correctly finding the card the data are recorded 
         album = sqlite3_column_int(stmt, 1);
-        //found = 1;
 
-        dbo = find_and_insert(db, name, set, NCards, album);
+        //Debug check
+        std::cout << "Card " << name << " found correctly" << std::endl;
+
+        //Run find and insert
+        dbo = find_and_insert(db, name, set, number);
+
+    }
+    else if(dbo == SQLITE_DONE) {
+        //Operation executed correctly but card not found
+        //Debug check 
+        std::cout << "Card " << name << "not found" << std::endl;
+
+        album = recorddata(db, name);
+        //Handle results compatible with error -110 to return to main
     }
     else {
+        //STEP error, returning error code
         //Debug check
-        std::cout << "Card " << name << " not found" << std::endl;
-
-        int album_id = recorddata(db, name);
-        //Call "insert_in_new", which makes a new cell and save up to 4 cards, calling itself recursively untill no cards are to add, passiing name, album_id, and number of cards (NCards)
+        std::cout << "Error: CData search failed" << std::endl;
+        return -113;
     }
 
-    //Close the statement
+    //Finalize statement
     sqlite3_finalize(stmt);
 
     //End function
@@ -376,126 +406,208 @@ int vprepare(sqlite3* db, const char* sql, sqlite3_stmt** stmt) {
     return dbo;
 }
 
-int find_and_insert(sqlite3* db, std::string card_name, std::string card_set,  int card_number, int album_id) {
-    //Statement to locate the free cells
-    const char* sql1 = "SELECT id, filled FROM Cells WHERE name = ? AND filled != 4 ORDER BY id ASC LIMIT 1;";
-    sqlite3_stmt* stmt = nullptr;
+int find_and_insert(sqlite3* db, std::string name, std::string set, int number) {
+    //Statement looking for free cells
+    const char* sql1 = "SELECT id, filled FROM Cells WHERE name = ? and filled != 4 ORDER BY id ASC LIMIT 1;"; //May consider removing the LIMIT 1 if useful for improving efficiency
+    sqlite3_stmt* stmt;
 
-    //Cell id to use
-    int id = -1;
-
-    //Preparing statement
+    //Cell id to use (if any available)
     int dbo = vprepare(db, sql1, &stmt);
-    //Error handling
     if(dbo != SQLITE_OK) {
-        //Error message thrown by vprepare, signal the error to main
-        return dbo;
+        //Prepare error signal
+        return -112;
     }
 
-    sqlite3_bind_text(stmt, 1, sql1, -1, nullptr);
+    sqlite3_bind_text(stmt, 1, name.c_str(), -1, SQLITE_STATIC);
 
-    //If there are available cells, record the first available cell id
-    if(sqlite3_step(stmt) == SQLITE_ROW) {
-        //Record cell id and free c_cards
-        id = sqlite3_column_int(stmt, 1);
-        int filled = sqlite3_column_int(stmt, 2);
+    int cells = -1;
+    int filling = -1;
 
-        //Record the free spaces
-        int upperbound = 4 - filled;
+    //Check if free cells exists
+    dbo = sqlite3_step(stmt);
+    if(dbo == SQLITE_ROW) {
+        //Found free cells are recorded
+        cells = sqlite3_column_int(stmt, 1);
+        filling = sqlite3_column_int(stmt, 2);
 
-        //If there are more free spaces than cards, the function runs up to card_number, vice versa all free spots are filled and there may be residual card (recursive call)
-        if(upperbound > card_number)
-            upperbound = card_number;
-
-        //Create the card and prepare the statement
-        const char* sql2 = "INSERT INTO Cards (name, c_set, cell_id) VALUES (?, ?, ?);";
-        sqlite3_stmt* stmt2 = nullptr;
-
-        //Prepare the statement to insert card name
-        int dbo = vprepare(db, sql2, &stmt);
-        //Error handling
-        if(dbo != SQLITE_OK) {
-            //Error message thrown by vprepare, signal the error to main
-            return dbo;
-        }
-
-        sqlite3_bind_text(stmt2, 1, card_name.c_str(), -1, nullptr);
-        sqlite3_bind_text(stmt2, 2, card_set.c_str(), -1, nullptr);
-        sqlite3_bind_int(stmt2, 3, id);
-
-        int card_id;
-
-        //Insert the cards in the free spots
-        for(int i = 0; i < upperbound; i++) {
-            switch(filled) {
-                //All spaces are free, record in c1
-                case 0: 
-                    //Insert the card, recording the id of the (newly created) card, then insert the id into the c1 element
-                    if(sqlite3_step(stmt2) == SQLITE_DONE) {
-                        //Debug check
-                        std::cout << "Inserted correctly" << std::endl;
-
-                        //Get inserted card id
-                        card_id = sqlite3_last_insert_rowid(db);
-
-                        //Insert value into the c1 cell
-                        sqlite3_stmt* stmt3 = nullptr;
-                        const char* sql3 = "UPDATE CellCards SET c1 = ? WHERE id = ?;";
-                        dbo = vprepare(db, sql3, &stmt3); 
-                        //Error handling
-                        if(dbo != SQLITE_OK) {
-                            //Error message thrown by vprepare, signal the error to main
-                            return dbo;
-                        }
-
-                        sqlite3_bind_int(stmt3, 1, card_id);
-                        sqlite3_bind_int(stmt3, 2, id);
-
-                        if(sqlite3_step(stmt3) == SQLITE_DONE) {
-                            //Debug check
-                            std::cout << "Inserted correctly" << std::endl;
-                        }
-                        else {
-                            std::cerr << "SQL Error: " << sqlite3_errmsg(db) << std::endl;
-                        }
-
-                        sqlite3_finalize(stmt3);
-
-                        const char* sql4 = "UPDATE Cells SET filled = filled + 1 WHERE id = ? AND filled < 4;";
-                        dbo = vprepare(db, sql4, &stmt3); 
-                        //Error handling
-                        if(dbo != SQLITE_OK) {
-                            //Error message thrown by vprepare, signal the error to main
-                            return dbo;
-                        }
-
-                        sqlite3_bind_int(stmt3, 1, id);
-
-                        if(sqlite3_step(stmt3) == SQLITE_DONE) {
-                            //Debug check
-                            std::cout << "Updated correctly" << std::endl;
-                        }
-                        else {
-                            std::cerr << "SQL Error: " << sqlite3_errmsg(db) << std::endl;
-                        }
-
-                    }
-                    else {
-                        //Debug check
-                        std::cout << "Card " << card_name << " not found" << std::endl;
-
-                        int album_id = recorddata(db, card_name);
-                        //Call "insert_in_new", which makes a new cell and save up to 4 cards, calling itself recursively untill no cards are to add, passiing name, album_id, and number of cards (NCards)
-                    }
-                    
-            }
-        }
-
+        //Insert the cards
+        number = insert(db, name, set, number, cells, filling);
+        if(number < 0)
+            return number;
 
     }
+    else if(dbo == SQLITE_DONE) {
+        //Operation executed correctly but card not found
+        
+        //* * *Create new cell, then insert
+        //TESTING ONLY ALL CARDS ARE PLACED IN ALBUM 1
+        dbo = make_cell(db, 1);
+
+        //Insert the cards
+        number = insert(db, name, set, number, cells, filling);
+        if(number < 0)
+            return number;
+
+    }
+    else {
+        //STEP error, returning error code
+        //Debug check
+        std::cout << "Error: Cells search failed" << std::endl;
+        return -113;
+    }
+
+    if(number > 0)
+        dbo = find_and_insert(db, name, set, number);
 
     return dbo;
 }
+
+int insert(sqlite3* db, std::string name, std::string set, int number, int cell, int fillings) {
+    //Create card using data passed
+    const char* sql1 = "INSERT INTO Cards (name, c_set, cell_id) VALUES (?, ?, ?);";
+
+    //Statement handle
+    sqlite3_stmt* stmt;
+
+    //prepare statement
+    int dbo = vprepare(db, sql1, &stmt);
+    if(dbo != SQLITE_OK) {
+        return -112;
+    }
+
+    //Bind the name
+    dbo = text_bind(db, &stmt, 1, name);
+    if(dbo == -114) {
+        //Signal the bind statement failed
+        return -114;
+    }
+
+    //Bind the set
+    dbo = text_bind(db, &stmt, 2, set);
+    if(dbo == -114) {
+        //Signal the bind statement failed
+        return -114;
+    }
+
+    //Bind the cell id
+    sqlite3_bind_int(stmt, 3, cell);
+
+    //Determine if there are more cards to insert or free spaces in the current cell
+    int upperbound = 4- fillings;
+
+    //Smallest number determines the cycle (can't place more cards than there are, also can't fill more spaces than available)
+    if (upperbound > number)
+        upperbound = number;
+
+    //Insert the cards to filling or untill all cards are located
+    for(int i = 0; i < upperbound; i++) {
+        //Insert the card and record the id of inserted card
+        int card_id;
+        if(sqlite3_step(stmt) == SQLITE_DONE) {
+            //Card correctly inserted
+            card_id = sqlite3_last_insert_rowid(db);
+
+            //Debug check
+            std::cout << "Inserted id " << card_id << std::endl;
+        }
+        else {
+            //Debug check
+            std::cout << "STEP error" << std::endl;
+            return -113;
+        }
+
+        const char* sql2;
+
+        //Depending on the filling value, a different statement is used to fill the cell
+        switch (fillings) {
+            case 0:
+                //If cell is completely empty, fill the first space
+                sql2 = "UPDATE CellCards SET c1 = ? WHERE id = ?;";
+                break;
+            case 1:
+                sql2 = "UPDATE CellCards SET c2 = ? WHERE id = ?;";
+                break;
+            case 2:
+                sql2 = "UPDATE CellCards SET c3 = ? WHERE id = ?;";
+                break;
+            case 3:
+                sql2 = "UPDATE CellCards SET c4 = ? WHERE id = ?;";
+                break;
+            default:
+                return -115;
+        }
+
+        //Index is updated to use the correct cell spot
+        fillings++;
+
+        //Extra control for data safety, I will probably remove it in release
+        if (fillings > 4) {
+            std::cerr << "Error: out of bound" << std::endl;
+            return -115;
+        }
+
+        //* * *Add option that removes last inserted card for memory integrity if the data safety control fails
+
+        //Cell statement handle
+        sqlite3_stmt* stmt2;
+
+        //prepare statement
+        dbo = vprepare(db, sql2, &stmt2);
+        if(dbo != SQLITE_OK) {
+            return -112;
+        }
+
+        //Bind card id to be inserted in the appropriate cell position
+        sqlite3_bind_int(stmt2, 1, card_id);
+        sqlite3_bind_int(stmt2, 2, cell);
+
+        if(sqlite3_step(stmt2) == SQLITE_DONE) {
+            //Card correctly inserted
+            //Debug check
+            std::cout << "Inserted id " << card_id << std::endl;
+        }
+        else {
+            //Debug check
+            std::cout << "STEP error" << std::endl;
+            return -113;
+        }
+
+        //* * *Update the cells table to mark that one more card is recorded there
+        const char* sql3 = "UPDATE Cells SET filled = filled + 1 WHERE id = ? AND filled < 4;";
+        sqlite3_stmt* stmt3;
+
+        dbo = vprepare(db, sql3, &stmt3); 
+        //Error handling
+        if(dbo != SQLITE_OK) {
+            //Error message thrown by vprepare, signal the error to main
+            return -112;
+        }
+
+        sqlite3_bind_int(stmt3, 1, cell);
+
+        //Check for cell update
+        if(sqlite3_step(stmt3) == SQLITE_DONE) {
+            //Card correctly inserted
+            //Debug check
+            std::cout << "Inserted id " << card_id << std::endl;
+        }
+        else {
+            //Debug check
+            std::cout << "STEP error" << std::endl;
+            return -113;
+        }
+
+        number--;
+
+        sqlite3_finalize(stmt2);
+        sqlite3_finalize(stmt3);
+    }
+
+    sqlite3_finalize(stmt);
+
+    return number;
+}
+
 
 int recorddata(sqlite3* db, std::string name) {
     //Non-GUI version of record new card data
