@@ -62,7 +62,7 @@ int main() {
     std::string set;
     int number;
 
-    do {
+    /*do {
         std::cout << "1: Load card\n0: Quit\n. . . ";
         std::cin >> menu;
 
@@ -95,7 +95,7 @@ int main() {
                 menu = -1;
                 break;
         }
-    }while(menu);
+    }while(menu);*/
 
     //Test "make_album"
     /*for(int i = 0; i < 3; i++) {
@@ -110,11 +110,18 @@ int main() {
     }*/
     
 
-    /*for(int i = 0; i < 10; i++) {
+    for(int i = 0; i < 10; i++) {
         dbo = make_cell(db, 1);
     }
 
-    for(int i = 0; i < 10; i++) {
+    card_rec(db, "3", "2", 1);
+
+    for(int i = 0; i < 5; ++i) {
+        int id = new_cell(db, 1);
+        std::cout << "inserted cell id: " << id << std::endl;
+    }
+
+    /*for(int i = 0; i < 10; i++) {
         dbo = make_cell(db, 2);
     }
 
@@ -129,7 +136,7 @@ int main() {
         dbo = make_card(db, name_C, "set", 1);
     }**/
 
-    recorddata(db, "Card");
+    //recorddata(db, "Card");
 
     return 0;
     
