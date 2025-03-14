@@ -39,6 +39,7 @@ int card_rec(sqlite3* db, std::string name, std::string set, int cell_id) {
     //Execute the step
     if(sqlite3_step(stmt) != SQLITE_DONE) {
         //Step Error
+        std::cerr << "Error: " << sqlite3_errmsg(db) << std::endl;
         sqlite3_finalize(stmt);
         return -113;
     }
@@ -93,7 +94,7 @@ int vprepare(sqlite3* db, const char* sql, sqlite3_stmt** stmt) {
     //Prepare the statement
     if(sqlite3_prepare_v2(db, sql, -1, stmt, nullptr) != SQLITE_OK) {
         //Signal preparation has failed and throw error message
-        std::cerr << "Binding error: " << sqlite3_errmsg(db) << std::endl;
+        std::cerr << "Prepare error: " << sqlite3_errmsg(db) << std::endl;
         return -112;
     }
 
@@ -159,6 +160,7 @@ int new_cell(sqlite3* db, int album_id) {
     }
     else {
         //Step Error
+        std::cerr << "Error: " << sqlite3_errmsg(db) << std::endl;
         sqlite3_finalize(stmt);
         return -113;
     }
@@ -197,6 +199,7 @@ int new_cell(sqlite3* db, int album_id) {
     }
     else{
         //Step Error
+        std::cerr << "Error: " << sqlite3_errmsg(db) << std::endl;
         sqlite3_finalize(stmt);
         return -113;
     }
@@ -220,6 +223,7 @@ int new_cell(sqlite3* db, int album_id) {
 
     if(sqlite3_step(stmt) != SQLITE_DONE) {
         //Step Error
+        std::cerr << "Error: " << sqlite3_errmsg(db) << std::endl;
         sqlite3_finalize(stmt);
         return -113;
     }
@@ -240,7 +244,7 @@ int rec_data_c(sqlite3* db, std::string name) {
     std::string wording;
     int album_id;
     std::string stats;
-    int constitution;
+    std::string constitution;
 
     //NOTE: ALL THE SECTION BELOW IS FOR MANUAL TESTING ONLY, IN THE GUI RELEASE EVERYTHING ABOVE LINE "//GUI-VIABLE CODE" IS TO BE REPLACED WITH THE CORRECT GUI CODE
     //For non GUI version data insertion is done manually
@@ -248,6 +252,9 @@ int rec_data_c(sqlite3* db, std::string name) {
     std::cin >> colors;
     std::cout << "Has the card supertypes? Y/N. . .\t";
     std::cin >> stype_check;
+
+    //Clear the input buffer from the \n
+    std::cin.ignore(256, '\n');
     
     //If there is a supertype, ask for supertype and flag for supertype existance
     if(stype_check == 'Y' || stype_check == 'y') {
@@ -283,19 +290,23 @@ int rec_data_c(sqlite3* db, std::string name) {
     if(type.find("Creature") != std::string::npos || type.find("creature") != std::string::npos) {
         std::cout << "Card inserted is a Creature, provide strenght: ";
         std::cin >> stats;
-        std::cout << "\nconstitution: ";
+        std::cout << "constitution: ";
         std::cin >> constitution;
-        stats.append(std::to_string(constitution));
-        c_check == 1;
+        stats = stats + "/" + constitution;
+        c_check = 1;
+
     }
     else if(type.find("Vehicle") != std::string::npos || type.find("vehicle") != std::string::npos) {
         std::cout << "Card inserted is a Vehicle, provide strenght: ";
         std::cin >> stats;
-        std::cout << "\nconstitution: ";
+        std::cout << "constitution: ";
         std::cin >> constitution;
-        stats.append(std::to_string(constitution));
-        c_check == 1;
+        stats = stats + "/" + constitution;
+        c_check = 1;
     }
+
+    //Clear the input buffer from the \n
+    std::cin.ignore(256, '\n');
 
     std::cout << "Insert the card wording. If there is none, type \"blank card\": ";
     std::getline(std::cin, wording);
@@ -303,28 +314,29 @@ int rec_data_c(sqlite3* db, std::string name) {
     //GUI-VIABLE CODE
     if((stype_check == 'y' || stype_check == 'Y') && c_check) {
         int dbo = record_stats(db, name, colors, cost, sutype, type, stats, wording, album_id);
-        if(dbo != SQLITE_OK) {<< dbo;
+        if(dbo != SQLITE_OK) {
+            std::cerr << "1Error " << dbo;
             return dbo;
         }
     }
     else if((stype_check == 'y' || stype_check == 'Y') && !c_check) {
         int dbo = record_nostats(db, name, colors, cost, sutype, type, wording, album_id);
         if(dbo != SQLITE_OK) {
-            std::cout << "Error " << dbo;
+            std::cout << "2Error " << dbo;
             return dbo;
         }
     }
     else if((stype_check != 'y' && stype_check != 'Y') && c_check) {
         int dbo = record_nosup(db, name, colors, cost, sutype, type, wording, album_id);
         if(dbo != SQLITE_OK) {
-            std::cout << "Error " << dbo;
+            std::cout << "3Error " << dbo;
             return dbo;
         }
     }
     else if((stype_check == 'y' || stype_check == 'Y') && !c_check) {
         int dbo = record_nostats_nosup(db, name, colors, cost, type, wording, album_id);
         if(dbo != SQLITE_OK) {
-            std::cout << "Error " << dbo;
+            std::cout << "4Error " << dbo;
             return dbo;
         }
     }
@@ -353,43 +365,43 @@ int record_stats(sqlite3* db, std::string name, std::string color, std::string c
         return -114;
     }
 
-    if(text_bind(db, &stmt, 1, color) != SQLITE_OK) {
+    if(text_bind(db, &stmt, 2, color) != SQLITE_OK) {
         //Bind Error
         sqlite3_finalize(stmt);
         return -114;
     }
 
-    if(text_bind(db, &stmt, 1, cost) != SQLITE_OK) {
+    if(text_bind(db, &stmt, 3, cost) != SQLITE_OK) {
         //Bind Error
         sqlite3_finalize(stmt);
         return -114;
     }
 
-    if(text_bind(db, &stmt, 1, sutype) != SQLITE_OK) {
+    if(text_bind(db, &stmt, 4, sutype) != SQLITE_OK) {
         //Bind Error
         sqlite3_finalize(stmt);
         return -114;
     }
 
-    if(text_bind(db, &stmt, 1, type) != SQLITE_OK) {
+    if(text_bind(db, &stmt, 5, type) != SQLITE_OK) {
         //Bind Error
         sqlite3_finalize(stmt);
         return -114;
     }
 
-    if(text_bind(db, &stmt, 1, stats) != SQLITE_OK) {
+    if(text_bind(db, &stmt, 6, stats) != SQLITE_OK) {
         //Bind Error
         sqlite3_finalize(stmt);
         return -114;
     }
 
-    if(text_bind(db, &stmt, 1, wording) != SQLITE_OK) {
+    if(text_bind(db, &stmt, 7, wording) != SQLITE_OK) {
         //Bind Error
         sqlite3_finalize(stmt);
         return -114;
     }
 
-    if(int_bind(db, &stmt, 3, album_id) != SQLITE_OK) {
+    if(int_bind(db, &stmt, 8, album_id) != SQLITE_OK) {
         //Bind Error
         sqlite3_finalize(stmt);
         return -114;
@@ -398,6 +410,7 @@ int record_stats(sqlite3* db, std::string name, std::string color, std::string c
     //Execute the step
     if(sqlite3_step(stmt) != SQLITE_DONE) {
         //Step Error
+        std::cerr << "Error: " << sqlite3_errmsg(db) << std::endl;
         sqlite3_finalize(stmt);
         return -113;
     }
@@ -424,37 +437,37 @@ int record_nostats(sqlite3* db, std::string name, std::string color, std::string
         return -114;
     }
 
-    if(text_bind(db, &stmt, 1, color) != SQLITE_OK) {
+    if(text_bind(db, &stmt, 2, color) != SQLITE_OK) {
         //Bind Error
         sqlite3_finalize(stmt);
         return -114;
     }
 
-    if(text_bind(db, &stmt, 1, cost) != SQLITE_OK) {
+    if(text_bind(db, &stmt, 3, cost) != SQLITE_OK) {
         //Bind Error
         sqlite3_finalize(stmt);
         return -114;
     }
 
-    if(text_bind(db, &stmt, 1, sutype) != SQLITE_OK) {
+    if(text_bind(db, &stmt, 4, sutype) != SQLITE_OK) {
         //Bind Error
         sqlite3_finalize(stmt);
         return -114;
     }
 
-    if(text_bind(db, &stmt, 1, type) != SQLITE_OK) {
+    if(text_bind(db, &stmt, 5, type) != SQLITE_OK) {
         //Bind Error
         sqlite3_finalize(stmt);
         return -114;
     }
 
-    if(text_bind(db, &stmt, 1, wording) != SQLITE_OK) {
+    if(text_bind(db, &stmt, 6, wording) != SQLITE_OK) {
         //Bind Error
         sqlite3_finalize(stmt);
         return -114;
     }
 
-    if(int_bind(db, &stmt, 3, album_id) != SQLITE_OK) {
+    if(int_bind(db, &stmt, 7, album_id) != SQLITE_OK) {
         //Bind Error
         sqlite3_finalize(stmt);
         return -114;
@@ -463,6 +476,7 @@ int record_nostats(sqlite3* db, std::string name, std::string color, std::string
     //Execute the step
     if(sqlite3_step(stmt) != SQLITE_DONE) {
         //Step Error
+        std::cerr << "Error: " << sqlite3_errmsg(db) << std::endl;
         sqlite3_finalize(stmt);
         return -113;
     }
@@ -489,31 +503,31 @@ int record_nostats_nosup(sqlite3* db, std::string name, std::string color, std::
         return -114;
     }
 
-    if(text_bind(db, &stmt, 1, color) != SQLITE_OK) {
+    if(text_bind(db, &stmt, 2, color) != SQLITE_OK) {
         //Bind Error
         sqlite3_finalize(stmt);
         return -114;
     }
 
-    if(text_bind(db, &stmt, 1, cost) != SQLITE_OK) {
+    if(text_bind(db, &stmt, 3, cost) != SQLITE_OK) {
         //Bind Error
         sqlite3_finalize(stmt);
         return -114;
     }
 
-    if(text_bind(db, &stmt, 1, type) != SQLITE_OK) {
+    if(text_bind(db, &stmt, 4, type) != SQLITE_OK) {
         //Bind Error
         sqlite3_finalize(stmt);
         return -114;
     }
 
-    if(text_bind(db, &stmt, 1, wording) != SQLITE_OK) {
+    if(text_bind(db, &stmt, 5, wording) != SQLITE_OK) {
         //Bind Error
         sqlite3_finalize(stmt);
         return -114;
     }
 
-    if(int_bind(db, &stmt, 3, album_id) != SQLITE_OK) {
+    if(int_bind(db, &stmt, 6, album_id) != SQLITE_OK) {
         //Bind Error
         sqlite3_finalize(stmt);
         return -114;
@@ -522,6 +536,7 @@ int record_nostats_nosup(sqlite3* db, std::string name, std::string color, std::
     //Execute the step
     if(sqlite3_step(stmt) != SQLITE_DONE) {
         //Step Error
+        std::cerr << "Error: " << sqlite3_errmsg(db) << std::endl;
         sqlite3_finalize(stmt);
         return -113;
     }
@@ -548,37 +563,37 @@ int record_nosup(sqlite3* db, std::string name, std::string color, std::string c
         return -114;
     }
 
-    if(text_bind(db, &stmt, 1, color) != SQLITE_OK) {
+    if(text_bind(db, &stmt, 2, color) != SQLITE_OK) {
         //Bind Error
         sqlite3_finalize(stmt);
         return -114;
     }
 
-    if(text_bind(db, &stmt, 1, cost) != SQLITE_OK) {
+    if(text_bind(db, &stmt, 3, cost) != SQLITE_OK) {
         //Bind Error
         sqlite3_finalize(stmt);
         return -114;
     }
 
-    if(text_bind(db, &stmt, 1, type) != SQLITE_OK) {
+    if(text_bind(db, &stmt, 4, type) != SQLITE_OK) {
         //Bind Error
         sqlite3_finalize(stmt);
         return -114;
     }
 
-    if(text_bind(db, &stmt, 1, stats) != SQLITE_OK) {
+    if(text_bind(db, &stmt, 5, stats) != SQLITE_OK) {
         //Bind Error
         sqlite3_finalize(stmt);
         return -114;
     }
 
-    if(text_bind(db, &stmt, 1, wording) != SQLITE_OK) {
+    if(text_bind(db, &stmt, 6, wording) != SQLITE_OK) {
         //Bind Error
         sqlite3_finalize(stmt);
         return -114;
     }
 
-    if(int_bind(db, &stmt, 3, album_id) != SQLITE_OK) {
+    if(int_bind(db, &stmt, 7, album_id) != SQLITE_OK) {
         //Bind Error
         sqlite3_finalize(stmt);
         return -114;
@@ -587,6 +602,7 @@ int record_nosup(sqlite3* db, std::string name, std::string color, std::string c
     //Execute the step
     if(sqlite3_step(stmt) != SQLITE_DONE) {
         //Step Error
+        std::cerr << "Error: " << sqlite3_errmsg(db) << std::endl;
         sqlite3_finalize(stmt);
         return -113;
     }
@@ -599,7 +615,7 @@ int record_nosup(sqlite3* db, std::string name, std::string color, std::string c
 int not_present_card(sqlite3* db, std::string name, std::string set, int number) {
     //The premise of this function is that the card has never been inserted before
     //Call the record data routine
-    int album_id = rec_data_C(db, name);
+    int album_id = rec_data_c(db, name);
 
     //Create the new cell to pass to the card record routine
     int cell_id = new_cell(db, album_id);
@@ -653,6 +669,7 @@ int insert_into(sqlite3* db, int cell_id, int card_id, int position) {
     //Execute the step
     if(sqlite3_step(stmt) != SQLITE_DONE) {
         //Step Error
+        std::cerr << "Error: " << sqlite3_errmsg(db) << std::endl;
         sqlite3_finalize(stmt);
         return -113;
     }
@@ -681,6 +698,7 @@ int remove_card(sqlite3* db, int card_id) {
     //Execute the step
     if(sqlite3_step(stmt) != SQLITE_DONE) {
         //Step Error
+        std::cerr << "Error: " << sqlite3_errmsg(db) << std::endl;
         sqlite3_finalize(stmt);
         return -113;
     }
@@ -715,6 +733,7 @@ int fill_update(sqlite3* db, int cell_id, int fill) {
     //Execute the step
     if(sqlite3_step(stmt) != SQLITE_DONE) {
         //Step Error
+        std::cerr << "Error: " << sqlite3_errmsg(db) << std::endl;
         sqlite3_finalize(stmt);
         return -113;
     }
@@ -725,7 +744,7 @@ int fill_update(sqlite3* db, int cell_id, int fill) {
 }
 
 //Function to record a newly created card into a cell
-int insert_to_cell(sqlite3* db, std::string name, std::string set, int cell_id, int number, int counter) {
+int insert_to_cell(sqlite3* db, std::string name, std::string set, int cell_id, int number, int counter, int is_root) {
     //Create a new card with the given cell id
     int card_id = card_rec(db, name, set, cell_id);
     if(card_id < 0) {
@@ -755,11 +774,18 @@ int insert_to_cell(sqlite3* db, std::string name, std::string set, int cell_id, 
     counter++;
     number--;
 
-    if(counter < 4 && number > 0)
-        number = insert_to_cell(db, name, set, cell_id, number, counter);
+    std::cout << "Debug: Number " << number << " and Counter " << counter << std::endl;
 
-    if(counter >= 4 || number <= 0) {
+    if(counter < 4 && number > 0) {
+        number = insert_to_cell(db, name, set, cell_id, number, counter, 0);
+        //If there has been a call, this function is root for the next call
+        is_root = 1;
+    }
+
+    //If this function is not root to another call, the update parameter can be updated
+    if(!is_root) {
         int dbo = fill_update(db, cell_id, counter);
+        std::cout << "Debug: Updating with counter " << counter << std::endl;
         if(dbo != SQLITE_DONE){
             //Error while fixing the filled value
             std::cerr << "Error of type " << dbo << " has occured while updating cell's filling value: " << counter << ", please update the value manually. " << number << " cards have not yet been recorded in the system. The application is shutting down to prevent further data loss." << std::endl;
@@ -774,31 +800,94 @@ int insert_to_cell(sqlite3* db, std::string name, std::string set, int cell_id, 
 
     return number;
 }
-//Insert the cards into cells
-/*
 
-    get the new cell id, the number of cards to load, and a counter defaulted to 0
+int assign_name(sqlite3* db, std::string name, int cell_id) {
+    //Statements to update the name of an existing cell
+    const char* sql = "UPDATE Cells SET name = ? WHERE id = ?;";
+    sqlite3_stmt* stmt = nullptr;
 
-    call make new card, get in return an id
+    if(vprepare(db, sql, &stmt) != SQLITE_OK) {
+        //Prepare Error
+        return -112;
+    }
 
-    call record into cell, passing the counter as position
+    if(text_bind(db, &stmt, 1, name) != SQLITE_OK) {
+        //Bind Error
+        sqlite3_finalize(stmt);
+        return -114;
+    }
 
-    increment the counter if everything checks out
-    decrease the number as well
+    if(int_bind(db, &stmt, 2, cell_id) != SQLITE_OK) {
+        //Bind Error
+        sqlite3_finalize(stmt);
+        return -114;
+    }
 
-    if number is > 0 AND counter is < 4 do: 
-        call this same function again. counter is counter.
+    //Execute the step
+    if(sqlite3_step(stmt) != SQLITE_DONE) {
+        //Step Error
+        std::cerr << "Error: " << sqlite3_errmsg(db) << std::endl;
+        sqlite3_finalize(stmt);
+        return -113;
+    }
 
-    if number is <= 0 OR counter is >= 4
-        NOTA: add a "flawed" flag that prompts for a manual check? or better add a vector holding all the newly inserted cards id, in case of error delete the last cell and all 
-        the cards inserted and show an error message "CARDS NOT RECORDED; DATABASE ERROR" to user.
+    return SQLITE_DONE;
+}
 
-        update the value of the cell "filling" to counter's value
+int first_insert_card(sqlite3* db, std::string name, std::string set, int number) {
+    //Card name has not been found and has to be recorded
+    int album_id = rec_data_c(db, name);
+    if(album_id < 0) {
+        //If id is below 0 an error has occured and needs to be reported
+        std::cerr << "Error of type " << album_id << " has occurred while recording a new card in the info database" << std::endl;
+        return album_id;
+    }
 
-    return number of eleemnt left
-*/
+    //Card has never been inserted, so skip the cells check and call directly the in_new_cell process
+    int dbo = in_new_cell(db, album_id, number, name, set);
+    if(dbo != SQLITE_OK) {
+        //Error has occured while recording cards
+        std::cerr << "Error of type " << dbo << " has occurred while recording the cards" << std::endl;
+        return dbo;
+    }
+    else {
+        //Debug check
+        std::cout << "All cards coorrectly recorded" << std::endl;
+    }
 
+    return dbo;
+}
 
+int in_new_cell(sqlite3* db, int album_id, int number, std::string name, std::string set) {
+    //Create new cell, then use the id to record up to 4 cards
+    int cell_id = new_cell(db, album_id);
+    if(cell_id < 0) {
+        //If cell id is below 0 some error has occuredd
+        std::cerr << "Error of type " << cell_id << " has occurred during the cell creation" << std::endl;
+        return cell_id;
+    }
+
+    int dbo = assign_name(db, name, cell_id);
+    if(dbo != SQLITE_DONE) {
+        //Error wjile reassigning the name
+        std::cerr << "Error of type " << dbo << " has occured while recording the name of cell " << cell_id << std::endl;
+        return dbo;
+    }
+
+    number = insert_to_cell(db, name, set, cell_id, number);
+
+    if(number > 0) {
+        in_new_cell(db, album_id, number, name, set);
+    }
+    else if(number < 0) {
+        //if number is less than 0 an error has occurred
+        std::cerr << "Error of type " << number << "has occured" << std::endl;
+        return number;
+    }
+    
+    //If the function has reached this point all input operations have been successfull and the database has been correctly updated
+    return SQLITE_OK;
+}
 
 
 
@@ -1130,7 +1219,7 @@ int make_cell(sqlite3* db, int album_id) {
     return dbo;
 }
 
-int make_card(sqlite3* db, std::string name, std::string set, int number) {
+/*int make_card(sqlite3* db, std::string name, std::string set, int number) {
     //Check if the card exists in the system
     const char* sql1 = "SELECT album_id FROM CData WHERE name = ?;";
     //Album id (if found) is recorded
@@ -1171,7 +1260,7 @@ int make_card(sqlite3* db, std::string name, std::string set, int number) {
         //Handle results compatible with error -110 to return to main
     }
     else {
-        //STEP error, returning error code
+        //Step Errorstd::cerr << "Error: " << sqlite3_errmsg(db) << std::endl;, returning error code
         //Debug check
         std::cout << "Error: CData search failed" << std::endl;
         return -113;
@@ -1182,9 +1271,9 @@ int make_card(sqlite3* db, std::string name, std::string set, int number) {
 
     //End function
     return dbo;
-}
+}*/
 
-int find_and_insert(sqlite3* db, std::string name, std::string set, int number, int album) {
+/*int find_and_insert(sqlite3* db, std::string name, std::string set, int number, int album) {
     //Statement looking for free cells
     const char* sql1 = "SELECT id, filled FROM Cells WHERE name = ? and filled != 4 ORDER BY id ASC LIMIT 1;"; //May consider removing the LIMIT 1 if useful for improving efficiency
     sqlite3_stmt* stmt;
@@ -1228,7 +1317,7 @@ int find_and_insert(sqlite3* db, std::string name, std::string set, int number, 
 
     }
     else {
-        //STEP error, returning error code
+        //Step Errorstd::cerr << "Error: " << sqlite3_errmsg(db) << std::endl;, returning error code
         //Debug check
         std::cout << "Error: Cells search failed" << std::endl;
         return -113;
@@ -1238,7 +1327,7 @@ int find_and_insert(sqlite3* db, std::string name, std::string set, int number, 
         dbo = find_and_insert(db, name, set, number, album);
 
     return dbo;
-}
+}*/
 
 int insert(sqlite3* db, std::string name, std::string set, int number, int cell, int fillings) {
     //Create card using data passed

@@ -6,6 +6,8 @@
 #include <cstdlib>
 #include <iostream>
 
+int tables(sqlite3* db);
+
 //Prepare a statement
 int vprepare(sqlite3* db, const char* sql, sqlite3_stmt** stmt);
 
@@ -32,12 +34,16 @@ int record_nostats(sqlite3* db, std::string name, std::string color, std::string
 int record_nostats_nosup(sqlite3* db, std::string name, std::string color, std::string cost, std::string type, std::string wording, int album_id);
 
 //Create a new completely empty cell
-int new_Cell(sqlite3* db, int album_id);
+int new_cell(sqlite3* db, int album_id);
 
 //Cell function to assign a name to a cell and its correspective cell-card bridge
+int assign_name(sqlite3* db, std::string name, int cell_id);
 
 //Insert the card in the Cards table
 int card_rec(sqlite3* db, std::string name, std::string set, int cell_id);
+
+//Cell filling update
+int fill_update(sqlite3* db, int cell_id, int fill);
 
 //Remove a card from the cards database table
 int remove_card(sqlite3* db, int card_id);
@@ -45,7 +51,14 @@ int remove_card(sqlite3* db, int card_id);
 //Record a card into the given cell's correct position, given the card and the cell respective IDs
 int insert_into(sqlite3* db, int cell_id, int card_id, int position = 0);
 
-//Tieing fucntion to insert a set of not previously recorded cards
+//Create a new cell and record the passed card
+int in_new_cell(sqlite3* db, int album_id, int number, std::string name, std::string set);
+
+//Inert in a passed cell
+int insert_to_cell(sqlite3* db, std::string name, std::string set, int cell_id, int number, int counter = 0, int is_root = 1);
+
+//Insert a card never inserted before
+int first_insert_card(sqlite3* db, std::string name, std::string set, int number);
 
 
 
