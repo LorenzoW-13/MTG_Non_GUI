@@ -37,7 +37,39 @@ int main() {
 
     dbo = tables(db);
 
-    dbo = in_new_cell(db, 2, 7, "Tesst_Card1", "Test_Set1");
+    dbo = insert_cards(db, "Prova", "SetProva", 3);
+    if(dbo != SQLITE_OK) {
+        return dbo;
+    }
+    dbo = insert_cards(db, "Prova1", "SetProva", 7);
+    if(dbo != SQLITE_OK) {
+        return dbo;
+    }
+    dbo = insert_cards(db, "Prova", "SetProva", 2);
+    if(dbo != SQLITE_OK) {
+        return dbo;
+    }
+    dbo = insert_cards(db, "Prova1", "SetProva", 1);
+    if(dbo != SQLITE_OK) {
+        return dbo;
+    }
+    dbo = insert_cards(db, "Prova2", "SetProva", 8);
+    if(dbo != SQLITE_OK) {
+        return dbo;
+    }
+    dbo = insert_cards(db, "Prova2", "SetProva", 3);
+    if(dbo != SQLITE_OK) {
+        return dbo;
+    }
+    dbo = insert_cards(db, "Prova", "SetProva", 3);
+    if(dbo != SQLITE_OK) {
+        return dbo;
+    }
+    dbo = insert_cards(db, "Prova2", "SetProva", 1);
+    if(dbo != SQLITE_OK) {
+        return dbo;
+    }
+
 
     return 0;
     

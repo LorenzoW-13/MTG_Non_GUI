@@ -294,7 +294,8 @@ int rec_data_c(sqlite3* db, std::string name) {
         std::cin >> constitution;
         stats = stats + "/" + constitution;
         c_check = 1;
-
+        //Clear the input buffer from the \n
+        std::cin.ignore(256, '\n');
     }
     else if(type.find("Vehicle") != std::string::npos || type.find("vehicle") != std::string::npos) {
         std::cout << "Card inserted is a Vehicle, provide strenght: ";
@@ -303,10 +304,11 @@ int rec_data_c(sqlite3* db, std::string name) {
         std::cin >> constitution;
         stats = stats + "/" + constitution;
         c_check = 1;
+        //Clear the input buffer from the \n
+        std::cin.ignore(256, '\n');
     }
 
-    //Clear the input buffer from the \n
-    std::cin.ignore(256, '\n');
+    
 
     std::cout << "Insert the card wording. If there is none, type \"blank card\": ";
     std::getline(std::cin, wording);
@@ -889,7 +891,161 @@ int in_new_cell(sqlite3* db, int album_id, int number, std::string name, std::st
     return SQLITE_OK;
 }
 
+//Search for cells containing cards named as the needed card
+std::queue<int> cells_of_name(sqlite3* db, std::string name) {
+    //Make the statement and bind the name to search
+    const char* sql = "SELECT id FROM Cells WHERE name = ? AND filled < 4 ORDER BY id ASC;";
+    sqlite3_stmt* stmt = nullptr;
+    std::queue<int> ids;
 
+    if(vprepare(db, sql, &stmt) != SQLITE_OK) {
+        //Prepare Error
+        ids.push(-112);
+        return ids;
+    }
+
+    if(text_bind(db, &stmt, 1, name) != SQLITE_OK) {
+        //Bind Error
+        sqlite3_finalize(stmt);
+        ids.push(-114);
+        return ids;
+    }
+
+    int dbo;
+
+    do {
+        //Execute the step
+        dbo = sqlite3_step(stmt);
+
+        if (dbo == SQLITE_ROW) {
+            //Insert the id found into the vector of free cell ids
+            ids.push(sqlite3_column_int(stmt, 0));
+        }
+        else if (dbo != SQLITE_DONE) {
+            //An error has occurred while executing the search step
+            std::cerr << "Error " << sqlite3_errmsg(db) << " has occurred while retrieving the free cells of name " << name << std::endl;
+            ids.push(-113);
+            return ids;
+        }
+    } while(dbo == SQLITE_ROW);
+
+    //If the search process has reached the SQLITE_DONE result the search has been completed correctly
+    return ids;
+}
+
+int check_db(sqlite3* db, std::string name) {
+    //Check if the card has ever been recorded
+    const char* sql = "SELECT album_id FROM CData WHERE name = ?;";
+    sqlite3_stmt* stmt;
+
+    if(vprepare(db, sql, &stmt) != SQLITE_OK) {
+        //Prepare Error
+        return -112;
+    }
+
+    if(text_bind(db, &stmt, 1, name) != SQLITE_OK) {
+        //Bind Error
+        sqlite3_finalize(stmt);
+        return -114;
+    }
+
+    int dbo = sqlite3_step(stmt);
+    if(dbo == SQLITE_ROW) {
+        //Card has been found and album_id is being returned
+        return sqlite3_column_int(stmt, 0);
+    }
+    else if(dbo == SQLITE_DONE) {
+        //Card has not been found even tho the step has been correctly executed
+        return 0;
+    }
+    else {
+        std::cerr << "Error " << sqlite3_errmsg(db) << " occured while looking for existence of " << name << std::endl;
+        return -113;
+    }
+}
+
+//Called after verifying the card actually exists
+//THIS FUCTION IS A BRAINSTORM AND NEED TO BE CORRECTED 
+int recorded_cards(sqlite3* db, std::string name, std::string set, int number, int album_id) {
+    //First step, recover the existing cells with available spots for new cards
+    std::queue<int> freecells;
+
+    freecells = cells_of_name(db, name);
+    if(freecells.size() == 0) {
+        //The search has benn terminated correctly, but there are no available cells
+        int dbo = in_new_cell(db, album_id, number, name, set);
+        if(dbo != SQLITE_OK) {
+            //Error has occurred somewhere while executing the insert function. The error log should have been provided by the lower ranking functions, so this if only transmits the error upstream
+            return dbo;
+        }
+    }
+    else if(freecells.back() < 0) {
+        //A negative has been inserted into the vector at last position, which means an error has occured
+        std::cerr << "Error of type " << freecells.back() << " has occured while looking for free cells" << std::endl;
+        return freecells.back();
+    }
+    else {
+        //If the vector has non negative entries some cells have been found and returned, and can be used
+        //Call the insert into until either retuned number is zero or until all cells are filled, in which case in_new_cell is called.
+        while(freecells.size() > 0 && number > 0) {
+            //If there are cards to place and also the vector hold cell ids available for the operation, repeat this process
+            //Get the first available id
+            int c_id = freecells.front();
+            //Remove the id from the vector, as it's going to be used
+            freecells.pop();
+            //Insert all cards that can be inserted into the cell
+            number = insert_to_cell(db, name, set, c_id, number);
+            if(number < 0) {
+                //If the function has returned a number below zero an error has occured. As the lower rank functions should handle the error log, this if-condition just returns the error code upstream
+                return number;
+            }
+        }
+        //If the while has ended but there are still cards to allocate, it means there are no more available cells
+        if(number > 0) {
+            int dbo = in_new_cell(db, album_id, number, name, set);
+
+            if(dbo != SQLITE_OK) {
+                //An error, which log should have already been handled by lower rank function, has occured, and its being signaled upsteram
+                return dbo;
+            }
+        }
+    }
+
+    return SQLITE_OK;
+}
+
+int insert_cards(sqlite3* db, std::string name, std::string set, int number) {
+    //First check if card exists in the database
+    int album_id = check_db(db, name);
+    int dbo = 0;
+    if(album_id > 0) {
+        //The card was already recorded and an album_id has been found
+        dbo = recorded_cards(db, name, set, number, album_id);
+        if(dbo != SQLITE_OK) {
+            //An error, which log has already been displayed and handled, has occured. Return the error code upstream
+            return dbo;
+        }
+        //DEBUG CHECK
+        std::cout << "Operation \"RECORDING EXISTING CARDS\" successfull" << std::endl;
+    }
+    else if(album_id == 0) {
+        //The card has never been recorded before
+        dbo = first_insert_card(db, name, set, number);
+        if(dbo != SQLITE_OK) {
+            //As above, there has been an error. The log has been handled and the error code is passed upstream to stop the app
+            return dbo;
+        }
+        //DEBUG CHECK
+        std::cout << "Operation \"RECORDING NEW CARDS\" successfull" << std::endl;
+    }
+    else {
+        //There has been an error whose log should have already been handled. However, another cerr is thrown before the error code is transmitted upstream
+        std::cerr << "While checking the database an error has occured and the value of error " << album_id << " has been assigned to the album's ID number. Error -110 is being further transmitted upstream" << std::endl;
+        return -110;
+    }
+
+    return SQLITE_OK;
+}
 
 
 
@@ -1170,6 +1326,11 @@ int make_cell(sqlite3* db, int album_id) {
     }
     else if (dbo == SQLITE_DONE) {
         max_cell_number = 0;
+    }
+    else {
+        //Step error
+        std::cerr << "Error " << sqlite3_errmsg(db) << " occurred while retrieving the highest cell number in album "<< album_id << std::endl;
+        return -113;
     }
 
     //The next cell has number equal to the found value +1
