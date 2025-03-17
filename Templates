@@ -1,0 +1,72 @@
+if(vprepare(db, sql, &stmt) != SQLITE_OK) {
+        //Prepare Error
+        return -112;
+    }
+
+    if(text_bind(db, &stmt, 1, name) != SQLITE_OK) {
+        //Bind Error
+        sqlite3_finalize(stmt);
+        return -114;
+    }
+
+    if(int_bind(db, &stmt, 3, cell_id) != SQLITE_OK) {
+        //Bind Error
+        sqlite3_finalize(stmt);
+        return -114;
+    }
+
+    //Execute the step
+    if(sqlite3_step(stmt) != SQLITE_DONE) {
+        //Step Error
+        std::cerr << "Error " << sqlite3_errmsg(db) << "; returning step_error (ERROR -113)";
+        sqlite3_finalize(stmt);
+        return -113;
+    }
+
+        //Album(s)
+    const char* Albums =    "CREATE TABLE IF NOT EXISTS Album (" //IF NOT EXISTS clause prevent duplication error. It's an additional layer of protection in case the later checks were to fail
+                            "id INTEGER PRIMARY KEY AUTOINCREMENT, " //See README.md, section "- 2:Album(s) organization"
+                            "name TEXT NOT NULL, " //The names will match the colors of the cards saved in each album, W (for white), U (for blue), B (black), R (red), G (green), C (colorless), and M (multi)
+                            "UNIQUE (name));";
+    const char* Cells =     "CREATE TABLE IF NOT EXISTS Cells ("
+                            "id INTEGER PRIMARY KEY AUTOINCREMENT, " //Cell ID is NOT Cell Number, which is unique in each album but repeatable globally (and thus can't be Prim. Key)
+                            "name TEXT DEFAULT NULL, " //Cell Name, matches the name of the (up to 4) cards that will be held in the cell. By default is null, as cells are created empty
+                            "album_id INTEGER, " //Album of reference, is FOREIGN KEY (see below)
+                            "number INTEGER NOT NULL, " //Cell Number, is unique within each number but not globally
+                            "filled INTEGER DEFAULT 0, " //Marks how many cards are already recorded in this cell, goes up to 4, where 4 is "Cell Completely Filled"
+                            "FOREIGN KEY(album_id) REFERENCES Album(id), "
+                            "UNIQUE(number, album_id));";
+    const char* CellsC =    "CREATE TABLE IF NOT EXISTS CellCards (" //Bridge table that records the cards saved in each cell
+                            "id INTEGER PRIMARY KEY, " //Cell ID, is FOREIGN KEY (see below)
+                            "c1 INTEGER DEFAULT NULL, " //First card of this cell, is FOREIGN KEY (see below)
+                            "c2 INTEGER DEFAULT NULL, " //Second card of this cell, is FOREIGN KEY (see below)
+                            "c3 INTEGER DEFAULT NULL, " //Third card of this cell, is FOREIGN KEY (see below)
+                            "c4 INTEGER DEFAULT NULL, " //Fourth card of this cell, is FOREIGN KEY (see below)
+                            "FOREIGN KEY(c1) REFERENCES Cards(id), "
+                            "FOREIGN KEY(c2) REFERENCES Cards(id), "
+                            "FOREIGN KEY(c3) REFERENCES Cards(id), "
+                            "FOREIGN KEY(c4) REFERENCES Cards(id));";
+    const char* Cards =     "CREATE TABLE IF NOT EXISTS Cards ("
+                            "id INTEGER PRIMARY KEY AUTOINCREMENT, " //Card id, primary key as Name is NOT UNIQUE
+                            "name TEXT NOT NULL, " //Name can be repeated as multiple cards can have the same nameù
+                            "c_set TEXT NOT NULL, " //Cards of same Name have been printed in multiple Set(s)
+                            "price DECIMAL DEFAULT NULL, " //Cards have prices characteristic of both Name and Set. For first release this field is set to NULL
+                            "cell_id INT NOT NULL, " //Cards must be saven in album cell or in deck (feature for future version)
+                            "FOREIGN KEY(cell_id) REFERENCES Cells(id));";
+    const char* CData =     "CREATE TABLE IF NOT EXISTS CData ("
+                            "name TEXT PRIMARY KEY, " //Each card name has all the same data except the price, which depends on set. Since Version 1 ignores prices, Name can be the primary key.
+                            "color TEXT NOT NULL, " //The card color(s), expressed by 1 or more letters, where multiple letters will be inserted in album M, and single-letters will be inserted in the matching album name.
+                            "cost TEXT NOT NULL, " //Card cost, usually in format number + chromatic mana symbols
+                            "sutype TEXT DEFAULT NULL, " //Supertype, NULL for most cards (can be Basic, Legendary, Snow, World)
+                            "typing TEXT NOT NULL, " //Type (Land, Creature, Artifact, Enchantment, Planeswalker, Battle, Instant, Sorcery) and subtype, will be recorded divided by a comma ","
+                            "stats TEXT DEFAULT NULL, " //Statistics, needed only if Creature, Vehicle ecc, in format S/T (Strenght/Toughness).
+                            "wording TEXT DEFAULT NULL, " //Text on the card, NULL by default as many creatures only have a S/T field. IMPORTANT: during preliminary testing is ignored to quicken execution
+                            "album_id INTEGER NOT NULL, " //Album where card is supposed to be saved, is FOREIGN KEY (see below) and matches the card's color identity
+                            "FOREIGN KEY(album_id) REFERENCES Album(id));";
+    const char* SData =     "CREATE TABLE IF NOT EXISTS SData ("
+                            "id INTEGER PRIMARY KEY AUTOINCREMENT, " //Is primary key
+                            "name TEXT NOT NULL, " //Card name, is foreign key
+                            "c_set TEXT NOT NULL, " //Card set
+                            "value DECIMAL DEFAULT NULL, " //Price, set to null in the first iteration
+                            "UNIQUE(name, c_set), " //Each couple card name - card set is unique
+                            "FOREIGN KEY(name) REFERENCES CData(name));";  

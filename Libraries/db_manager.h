@@ -61,7 +61,7 @@ int insert_to_cell(sqlite3* db, std::string name, std::string set, int cell_id, 
 //Insert a card never inserted before
 int first_insert_card(sqlite3* db, std::string name, std::string set, int number);
 
-std::queue<int> cells_of_name(sqlite3* db, std::string name);
+std::queue<std::pair<int, int>> cells_of_name(sqlite3* db, std::string name);
 
 int check_db(sqlite3* db, std::string name);
 
